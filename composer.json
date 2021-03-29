@@ -1,0 +1,46 @@
+{
+  "name": "somov/yii2-queue-manager",
+  "description": "Yii2 manager Queue",
+  "type": "yii2-extension",
+  "keywords": [
+    "yii2",
+    "queue",
+    "manager"
+  ],
+  "license": "BSD-3-Clause",
+  "authors": [
+    {
+      "name": "Somov",
+      "email": "somov.nn@gmail.com"
+    }
+  ],
+  "require": {
+    "yiisoft/yii2-queue": ">=2.0.2",
+    "ext-pdo": "*"
+  },
+
+  "minimum-stability": "stable",
+
+  "require-dev": {
+    "codeception/codeception": "^4.0",
+    "codeception/module-asserts": "^1.0",
+    "codeception/module-yii2": "^1.0",
+    "codeception/module-filesystem": "^1.0",
+    "codeception/verify": "~0.5.0 || ~1.1.0",
+    "symfony/browser-kit": ">=2.7 <=4.2.4"
+  },
+
+  "autoload": {
+    "psr-4": {
+      "somov\\qm\\": "src"
+    }
+  },
+  "archive": {
+    "exclude": [
+      "/.*",
+      "/tests*",
+      "/vendor*",
+      "/bin*"
+    ]
+  }
+}
