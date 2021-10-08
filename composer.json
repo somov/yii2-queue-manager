@@ -19,10 +19,8 @@
     "yiisoft/yii2-queue": ">=2.0.2",
     "somov/yii2-common":">=1.2.1",
     "yiisoft/yii2-bootstrap": "~2.0.0",
-    "npm-asset/yii2-queue-manager-client": "~0.1.3"
+    "somov/yii2-queue-manager-client": "*"
   },
-
-  "minimum-stability": "stable",
 
   "require-dev": {
     "codeception/codeception": "^4.0",
@@ -38,6 +36,18 @@
       "somov\\qm\\": "src"
     }
   },
+
+  "config": {
+    "process-timeout": 1800
+  },
+
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://asset-packagist.org"
+    }
+  ],
+
   "archive": {
     "exclude": [
       "/.*",
