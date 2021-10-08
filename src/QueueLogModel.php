@@ -26,6 +26,7 @@ use yii\helpers\UnsetArrayValue;
  * @property int $status
  * @property int $pid
  * @property int $processed_at [timestamp]
+ * @property int $type [bigint(20)]
  */
 class QueueLogModel extends \yii\db\ActiveRecord
 {
@@ -44,13 +45,21 @@ class QueueLogModel extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['channel', 'job', 'pushed_at', 'ttr', 'delay'], 'required', 'on' => 'create'],
+            [['channel', 'job', 'pushed_at', 'ttr', 'delay', 'type'], 'required', 'on' => 'create'],
             [['job', 'data'], 'string'],
-            [['pushed_at', 'ttr', 'delay', 'priority', 'reserved_at', 'attempt', 'done_at', 'status'], 'integer'],
+            [['pushed_at', 'ttr', 'delay', 'priority', 'reserved_at', 'attempt', 'done_at', 'status', 'type'], 'integer'],
             [['channel', 'name'], 'string', 'max' => 255],
         ];
     }
 
+    /**
+     * @return QueueLogModelQuery|
+     * @throws \yii\base\InvalidConfigException
+     */
+    public static function find()
+    {
+        return Yii::createObject(QueueLogModelQuery::class, [static::class]);
+    }
 
     /**
      * @return array
@@ -195,10 +204,11 @@ class QueueLogModel extends \yii\db\ActiveRecord
      */
     public function getTitle()
     {
-        return Yii::t('app/catalog/queue', 'Task[{id}] {name}', [
+        return trim(strtr('Task[id] name title', [
             'id' => $this->id,
-            'name' => $this->name
-        ]);
+            'name' => $this->name,
+            'title' => ArrayHelper::getValue($this->getData(), 'title', '')
+        ]));
     }
 
     /**
@@ -234,7 +244,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
      */
     public function getTaskErrors()
     {
-        return ArrayHelper::map(ArrayHelper::getValue($this->getData(), 'error', []), 'attempt', 'message');
+        return array_values(ArrayHelper::map(ArrayHelper::getValue($this->getData(), 'error', []), 'attempt', 'message'));
     }
 
     /**

@@ -22,5 +22,9 @@ use yii\queue\JobInterface;
  */
 interface QueueManagerJobInterface extends JobInterface
 {
-
+    /**
+     * @param \yii\queue\Queue|QueueDbLogInterface $queue
+     * @return mixed|void
+     */
+    public function execute($queue);
 }

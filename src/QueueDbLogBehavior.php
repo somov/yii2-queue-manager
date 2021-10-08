@@ -11,6 +11,7 @@ namespace somov\qm;
 use yii\base\Behavior;
 use yii\base\Exception;
 use yii\base\UserException;
+use yii\db\ActiveQuery;
 use yii\db\Query;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Inflector;
@@ -45,6 +46,36 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         ];
     }
 
+
+    /**
+     * @param array|QueueManagerJobInterface $job
+     * @param QueueLogModelQuery $existQuery
+     * @param array|null $config ttr, delay,priority
+     * @return int
+     */
+    public function pushJob($job, $existQuery = null, $config = null)
+    {
+        if (is_array($job)) {
+            $job = \Yii::createObject($job);
+        }
+
+        if ($existQuery instanceof QueueLogModelQuery) {
+            if ($existQuery->byType($job)->exists()) {
+                return -1;
+            }
+        }
+        if (isset($config) && is_array($config)) {
+            $handler = null;
+            $handler = function (PushEvent $event) use (&$handler, $config) {
+                \Yii::configure($event, $config);
+                $this->owner->off(Queue::EVENT_BEFORE_PUSH, $handler);
+            };
+
+            $this->owner->on(Queue::EVENT_BEFORE_PUSH, $handler);
+        }
+        return $this->owner->push($job);
+    }
+
     /**
      * @param JobInterface $job
      * @param integer $done
@@ -62,8 +93,14 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         $raw = [
             'done' => $done,
             'total' => $total,
-            'percent' => isset($percent) ? $percent : (integer)round(((integer)$done * 100 / (integer)$total), 0),
         ];
+
+        if ($total > 0 || isset($percent)) {
+            $doneMax = isset($data) ? (int) ArrayHelper::getValue($data, 'max', 100) : 100;
+            $raw = [
+                'percent' => isset($percent) ? $percent : (integer)round(((integer)$done * $doneMax / (integer)$total), 0),
+            ];
+        }
 
         if (isset($text)) {
             $data['text'] = $text;
@@ -77,28 +114,41 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
     }
 
+    /**
+     * @return QueueLogModelQuery
+     * @throws \yii\base\InvalidConfigException
+     */
+    public function getLogListQuery()
+    {
+        $query = QueueLogModel::find()->byChannel($this->owner->channel);
+        $query->behavior = $this;
+        return $query;
+    }
 
     /**
-     * @param int|int[] $status
+     * @param int|int[]|null $status
      * @param JobInterface|string $type
      * @param \Closure|null $queryCallback
-     * @return QueueLogModel[]
-     * @throws \yii\base\InvalidConfigException
+     * @return QueueLogModel[]|QueueLogModelQuery
      */
     public function getLogsList($status = QueueDbLogInterface::LOG_STATUS_WAIT, $type = null, $queryCallback = null)
     {
-        $q = QueueLogModel::find()->where(['[[status]]' => $status, '[[channel]]' => $this->owner->channel]);
+        $query = $this->getLogListQuery();
 
+        if (isset($status)) {
+            $query->byStatus($status);
+        }
         if (isset($type)) {
-            $q->andWhere('[[name]] = :n', ['n' => $this->getTaskName($type)]);
+            $query->byType($this->getTaskType($type));
         }
 
         if (isset($queryCallback)) {
-            return $queryCallback($q);
+            return $queryCallback($query);
         }
 
-        return $q->all();
+        return $query->all();
     }
+
 
     /**
      * @throws \yii\db\Exception
@@ -237,6 +287,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         $model = new QueueLogModel([
             'id' => $event->id,
             'name' => $this->getTaskName($event->job),
+            'type' => $this->getTaskType($event->job),
             'ttr' => $event->ttr,
             'delay' => $event->delay,
             'priority' => $event->priority ?: 1024,
@@ -311,6 +362,21 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         }
 
         return Inflector::camel2words((StringHelper::basename(get_class($job))));
+    }
+
+    /**
+     * @param string[]|string|QueueManagerJobInterface $type
+     * @return int
+     */
+    public function getTaskType($type)
+    {
+        if (is_object($type)) {
+            $type = get_class($type);
+        } elseif (is_array($type)) {
+            $type = implode('_', $type);
+        }
+
+        return crc32($type);
     }
 
     /**
