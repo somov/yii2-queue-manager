@@ -9,7 +9,7 @@
 namespace somov\qm;
 
 use somov\common\traits\ScriptWidgetRegisterTrait;
-use somov\qm\assets\JQueryEsAsset;
+use somov\qm\assets\JQueryAsset;
 use yii\base\InvalidConfigException;
 use yii\base\Widget;
 use yii\helpers\ArrayHelper;
@@ -51,7 +51,7 @@ class QueueManagerWidget extends Widget
     /**
      * @var string
      */
-    public $assetsClass = JQueryEsAsset::class;
+    public $assetsClass = JQueryAsset::class;
 
     /**
      * @var array
@@ -99,7 +99,7 @@ class QueueManagerWidget extends Widget
             $this->registerScriptPluginViaDataAttr('manager', $this->assetsClass, $this->wrapperSelector);
         }
 
-        echo Html::tag('div', false, $this->options);
+        return Html::tag('div', false, $this->options);
     }
 
 
