@@ -15,7 +15,7 @@ use yii\web\AssetBundle;
  * Class QueueManagerWidgetAsset
  * @package app\assets\backend
  */
-class JQueryEsAsset extends AssetBundle
+class JQueryAsset extends AssetBundle
 {
     use ColorTrait;
 
@@ -30,7 +30,7 @@ class JQueryEsAsset extends AssetBundle
     ];
 
     public $js = [
-        'js/jquery.queueMc_es.min.js'
+        'js/jquery.queueMc.min.js'
     ];
 
     public $depends = [
@@ -45,6 +45,7 @@ class JQueryEsAsset extends AssetBundle
         parent::init();
         $this->applyColors();
     }
+
 
 
 }
