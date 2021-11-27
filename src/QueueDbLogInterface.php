@@ -9,7 +9,6 @@
 namespace somov\qm;
 
 
-use yii\db\ActiveQuery;
 use yii\queue\JobInterface;
 
 /**
@@ -48,17 +47,29 @@ interface QueueDbLogInterface
      */
     public function getLogsList($status = QueueDbLogInterface::LOG_STATUS_WAIT, $type = null, $queryCallback = null);
 
-
-
     /**
      * @param JobInterface $job
      * @param integer $done
      * @param integer $total
      * @param string $text
      * @param integer|null $percent
-     * @param array|null $data
      */
-    public function setProgress($job, $done, $total, $text = null, $percent = null, $data = null);
+    public function setProgress($job, $done, $total, $text = '', $percent = null);
+
+    /**
+     * @param JobInterface $job
+     * @param array $data
+     * @param string $text
+     * @param integer|null $streamId
+     */
+    public function setProgressStream($job, array $data, $text = '', $streamId = null);
+
+    /**
+     * @param JobInterface $job
+     * @param string $text
+     * @param bool $save
+     */
+    public function setProgressText($job, $text, $save = false);
 
     /**
      * @param JobInterface|string $job job instance or class name

@@ -25,7 +25,7 @@ trait InformationConverterTrait
         'id' => 'id',
         'title' => 'title',
         'text' => 'progressText',
-        'progress' => 'progressPercent',
+        'progress' => 'progress',
         'statusCaption' => 'statusCaption',
         'status' => 'status',
         'errors' => 'taskErrors'

@@ -82,9 +82,9 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @param integer $total
      * @param string $text
      * @param integer|null $percent
-     * @param array|null $data
+     * @throws \Exception
      */
-    public function setProgress($job, $done, $total, $text = null, $percent = null, $data = null)
+    public function setProgress($job, $done, $total, $text = '', $percent = null)
     {
         if (!$model = $this->getLog($job)) {
             return;
@@ -96,21 +96,77 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         ];
 
         if ($total > 0 || isset($percent)) {
-            $doneMax = isset($data) ? (int) ArrayHelper::getValue($data, 'max', 100) : 100;
+            $doneMax = isset($data) ? (int)ArrayHelper::getValue($data, 'max', 100) : 100;
             $raw = [
                 'percent' => isset($percent) ? $percent : (integer)round(((integer)$done * $doneMax / (integer)$total), 0),
             ];
         }
 
-        if (isset($text)) {
-            $data['text'] = $text;
-        }
-
-        if (is_array($data)) {
-            $raw = array_merge($data, $raw);
+        if (empty($text) === false) {
+            $this->setProgressText($job, $text);
         }
 
         $model->setData(['progress' => new ReplaceArrayValue($raw)])->save();
+
+    }
+
+    /**
+     *
+     * @param JobInterface $job
+     * @param array $data
+     * @param string $text
+     * @param integer|null $streamId
+     */
+    public function setProgressStream($job, array $data, $text = '', $streamId = null)
+    {
+
+        if (!$model = $this->getLog($job)) {
+            return;
+        }
+
+        $streamPercent = function ($data) {
+            $percent = ArrayHelper::getValue($data, 'percent', false);
+            if ($percent) {
+                return $percent;
+            }
+            $max = ArrayHelper::getValue($data, 'maz', 100);
+            $total = ArrayHelper::getValue($data, 'total', 0);
+            $done = ArrayHelper::getValue($data, 'done', 0);
+            return $done > 0 ? (integer)round(((integer)$done * $max / (integer)$total), 0) : 0;
+        };
+
+        if (empty($streamId)) {
+            $raw = [];
+            foreach ($data as $id => $stream) {
+                $raw[$id] = (false === is_array($data)) ? $streamPercent($stream) : (int)$stream;
+            }
+        } else {
+            $raw = $model->getProgress(true);
+            ArrayHelper::setValue($raw, $streamId, $streamPercent($data));
+        }
+
+        if (empty($text) === false) {
+            $this->setProgressText($job, $text);
+        }
+
+        $model->setData(['progress' => new ReplaceArrayValue($raw)])->save(false);
+    }
+
+    /**
+     * @param JobInterface $job
+     * @param string $text
+     * @param bool $save
+     */
+    public function setProgressText($job, $text, $save = false)
+    {
+        if (!$model = $this->getLog($job)) {
+            return;
+        }
+        $model->setData(['text' => new ReplaceArrayValue($text)]);
+
+        if ($save) {
+            $model->save(false);
+        }
 
     }
 

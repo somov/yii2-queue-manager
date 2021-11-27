@@ -68,7 +68,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
     {
         return [
             QueueDbLogInterface::LOG_STATUS_EXEC => 'In progress',
-            QueueDbLogInterface::LOG_STATUS_WAIT => 'Waiting',  
+            QueueDbLogInterface::LOG_STATUS_WAIT => 'Waiting',
             QueueDbLogInterface::LOG_STATUS_ERROR => 'Complete with error',
             QueueDbLogInterface::LOG_STATUS_DONE => 'Complete',
         ];
@@ -212,22 +212,19 @@ class QueueLogModel extends \yii\db\ActiveRecord
     }
 
     /**
-     * @return array
+     * @param bool $withKeys
+     * @return integer[]|integer
      * @throws \Exception
      */
-    public function getProgress()
+    public function getProgress($withKeys = false)
     {
-        return ArrayHelper::getValue($this->getData(), 'progress');
+        $data = ArrayHelper::getValue($this->getData(), 'progress');
+        if (is_array($data)) {
+            return ($withKeys) ? array_map('intval', $data) : array_values(array_map('intval', $data));
+        }
+        return (int)$data;
     }
 
-    /**
-     * @return integer
-     * @throws \Exception
-     */
-    public function getProgressPercent()
-    {
-        return (integer)ArrayHelper::getValue($this->getProgress(), 'percent', 0);
-    }
 
     /**
      * @return string
@@ -235,7 +232,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
      */
     public function getProgressText()
     {
-        return ArrayHelper::getValue($this->getProgress(), 'text', '');
+        return ArrayHelper::getValue($this->getData(), 'text', '');
     }
 
     /**
