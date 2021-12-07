@@ -73,7 +73,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
             $this->owner->on(Queue::EVENT_BEFORE_PUSH, $handler);
         }
-        return $this->owner->push($job);
+        return (int) $this->owner->push($job);
     }
 
     /**

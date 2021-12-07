@@ -28,7 +28,8 @@ trait InformationConverterTrait
         'progress' => 'progress',
         'statusCaption' => 'statusCaption',
         'status' => 'status',
-        'errors' => 'taskErrors'
+        'errors' => 'taskErrors',
+        'result' => 'result'
     ];
 
     /**

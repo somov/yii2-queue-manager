@@ -117,12 +117,21 @@ class QueueLogModel extends \yii\db\ActiveRecord
     }
 
     /**
+     * @var array
+     */
+    private $_data;
+
+    /**
      * @return array
      */
     public function getData()
     {
+        if (is_array($this->_data)) {
+            return $this->_data;
+        }
+
         try {
-            return Json::decode($this->data);
+            return $this->_data = Json::decode($this->data);
         } catch (\Exception $exception) {
             return [];
         }
@@ -134,8 +143,20 @@ class QueueLogModel extends \yii\db\ActiveRecord
      */
     public function setData(array $value)
     {
-        $this->data = Json::encode(ArrayHelper::merge($this->getData(), $value));
+        $this->_data = ArrayHelper::merge($this->getData(), $value);
         return $this;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function beforeSave($insert)
+    {
+        if (parent::beforeSave($insert)) {
+            $this->data = Json::encode($this->_data);
+            return true;
+        }
+        return false;
     }
 
 
@@ -257,6 +278,15 @@ class QueueLogModel extends \yii\db\ActiveRecord
         return implode(',', ArrayHelper::map(ArrayHelper::getValue($this->getData(), 'error'), 'attempt', function ($item) {
             return strtr("[attempt] - message", $item);
         }));
+    }
+
+    /**
+     * @return mixed
+     * @throws \Exception
+     */
+    public function getResult()
+    {
+        return ArrayHelper::getValue($this->getData(), 'result');
     }
 
     /**
