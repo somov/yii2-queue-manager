@@ -63,7 +63,7 @@ trait InformationConverterTrait
             ]));
         }
 
-        return array_values($logs);
+        return array_values($ids);
     }
 
 }
