@@ -19,7 +19,7 @@
     "yiisoft/yii2-queue": ">=2.0.2",
     "somov/yii2-common":">=1.2.1",
     "yiisoft/yii2-bootstrap": "~2.0.0",
-    "somov/yii2-queue-manager-client": "^1.0.3"
+    "somov/yii2-queue-manager-client": "^1.0.4"
   },
 
   "require-dev": {
