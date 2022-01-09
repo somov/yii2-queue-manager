@@ -421,17 +421,14 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
     }
 
     /**
-     * @param string[]|string|QueueManagerJobInterface $type
+     * @param |string|QueueManagerJobInterface $type
      * @return int
      */
     public function getTaskType($type)
     {
         if (is_object($type)) {
             $type = get_class($type);
-        } elseif (is_array($type)) {
-            $type = implode('_', $type);
         }
-
         return crc32($type);
     }
 

@@ -9,6 +9,7 @@
 namespace somov\qm;
 
 
+use yii\base\InvalidConfigException;
 use yii\db\ActiveQuery;
 
 /**
@@ -42,12 +43,24 @@ class QueueLogModelQuery extends ActiveQuery
     }
 
     /**
-     * @param $type
+     * @param string|string[]|QueueManagerJobInterface|QueueManagerJobInterface[] $type
      * @return QueueLogModelQuery
+     * @throws  InvalidConfigException
      */
     public function byType($type)
     {
-        return $this->andWhere(['[[type]]' => $this->behavior->getTaskType($type)]);
+        if (is_string($type)) {
+            return $this->andWhere(['[[type]]' => $this->behavior->getTaskType($type)]);
+        } else if (is_array($type)) {
+            return $this->andWhere(['or',
+                [
+                    '[[type]]' => array_map(function ($t) {
+                        return $this->behavior->getTaskType($t);
+                    }, $type)
+                ]
+            ]);
+        }
+        throw  new InvalidConfigException('Unelected param type');
     }
 
     /**
