@@ -49,7 +49,7 @@ class QueueLogModelQuery extends ActiveQuery
      */
     public function byType($type)
     {
-        if (is_string($type)) {
+        if (is_string($type) || $type instanceof QueueManagerJobInterface) {
             return $this->andWhere(['[[type]]' => $this->behavior->getTaskType($type)]);
         } else if (is_array($type)) {
             return $this->andWhere(['or',
