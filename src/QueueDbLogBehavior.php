@@ -13,22 +13,21 @@ use Throwable;
 use Yii;
 use yii\base\Behavior;
 use yii\base\Exception;
-use yii\base\InvalidCallException;
 use yii\base\InvalidConfigException;
 use yii\base\NotSupportedException;
 use yii\base\UserException;
-use yii\db\Query;
 use yii\db\StaleObjectException;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Inflector;
 use yii\helpers\ReplaceArrayValue;
 use yii\helpers\StringHelper;
+use yii\queue\cli\Queue;
 use yii\queue\db\Queue as DBQueue;
 use yii\queue\ExecEvent;
 use yii\queue\JobEvent;
 use yii\queue\JobInterface;
 use yii\queue\PushEvent;
-use yii\queue\Queue;
+
 
 /**
  * Class QueueDbLogBehavior
@@ -248,17 +247,27 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
     /**
      * @param ExecEvent $event
      * @throws InvalidConfigException
+     * @throws StaleObjectException
+     * @throws Throwable
      */
     public function beforeExec(ExecEvent $event)
     {
         if (!$log = $this->getLog($event->job, $event->id)) {
-             $log = $this->createQueueLog($event);
+            $log = $this->createQueueLog($event);
         }
+
+        if ($log->status === QueueDbLogInterface::LOG_STATUS_DELETE) {
+            $event->handled = true;
+            $log->delete();
+            return;
+        }
+
         $log->reserved_at = time();
         $log->attempt = $event->attempt;
         $log->status = QueueDbLogInterface::LOG_STATUS_EXEC;
         $log->pid = $event->sender->getWorkerPid();
         $log->save();
+
 
     }
 
@@ -287,7 +296,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @param Queue $queue
      * @param null|Exception $error
      */
-    protected function restart(JobInterface $job, Queue $queue, $error = null)
+    protected function restart(JobInterface $job, \yii\queue\Queue $queue, $error = null)
     {
         if ($job instanceof QueueManagerJobInterface) {
 
@@ -369,7 +378,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
             'ttr' => $event->ttr ?? 0,
             'delay' => $event->delay ?? 0,
             'priority' => $event->priority ?? $this->defaultPriority,
-            'status' => ($event instanceof ExecEvent) ? QueueDbLogInterface::LOG_STATUS_EXEC : QueueDbLogInterface::LOG_STATUS_WAIT ,
+            'status' => ($event instanceof ExecEvent) ? QueueDbLogInterface::LOG_STATUS_EXEC : QueueDbLogInterface::LOG_STATUS_WAIT,
             'job' => $event->sender->serializer->serialize($event->job),
             'channel' => $event->sender->channel ?? $this->getChannel(),
             'pushed_at' => time(),
@@ -400,9 +409,6 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      */
     public function deleteJob(QueueLogModel $model)
     {
-        if (false === $this->owner instanceof DBQueue) {
-            throw  new InvalidCallException('Method not allowed');
-        }
 
         if ($model->status === self::LOG_STATUS_EXEC) {
             throw  new UserException('Running tasks cannot be deleted');
@@ -412,12 +418,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
             return $model->delete();
         }
 
-        if (!$message = (new Query())->from($this->owner->tableName)
-            ->select('job')->where(['[[id]]' => $model->id])->limit(1)->one()) {
-            return $model->delete();
-        }
-
-        list($job) = $this->owner->unserializeMessage($message['job']);
+        list($job) = $this->owner->unserializeMessage($model->job);
 
         if ($job instanceof QueueManagerJobInterface && method_exists($job, 'beforeDelete')) {
             if (!$job->beforeDelete($this->owner, $model)) {
@@ -425,11 +426,8 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
             }
         }
 
-        if (Yii::$app->db->createCommand()->delete($this->owner->tableName, ['[[id]] ' => $model->queue_id])->execute() > 0) {
-            return $model->delete();
-        }
+        return $model->updateAttributes(['status' => QueueDbLogInterface::LOG_STATUS_DELETE]) === 1;
 
-        return false;
     }
 
 
