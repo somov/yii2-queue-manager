@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Yii console bootstrap file.
+ */
+
+
+use yii\helpers\ArrayHelper;
+
+require '_bootstrap.php';
+
+$config = require_once 'console.php';
+ArrayHelper::remove($config, 'class');
+$application = new yii\console\Application($config);
+$exitCode = $application->run();
+exit($exitCode);
