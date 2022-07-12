@@ -2,7 +2,11 @@
 
 namespace somov\qm;
 
+use closure;
+use Exception;
 use Yii;
+use yii\base\InvalidConfigException;
+use yii\db\ActiveRecord;
 use yii\db\Query;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Json;
@@ -12,6 +16,7 @@ use yii\helpers\UnsetArrayValue;
  * This is the model class for table "{{%queue_log}}".
  *
  * @property int $id
+ * @property string $queue_id [varchar(200)]
  * @property string $channel
  * @property string $name
  * @property resource $job
@@ -28,7 +33,7 @@ use yii\helpers\UnsetArrayValue;
  * @property int $processed_at [timestamp]
  * @property int $type [bigint(20)]
  */
-class QueueLogModel extends \yii\db\ActiveRecord
+class QueueLogModel extends ActiveRecord
 {
 
     /**
@@ -45,8 +50,8 @@ class QueueLogModel extends \yii\db\ActiveRecord
     public function rules()
     {
         return [
-            [['channel', 'job', 'pushed_at', 'ttr', 'delay', 'type'], 'required', 'on' => 'create'],
-            [['job', 'data'], 'string'],
+            [['queue_id', 'channel', 'job', 'pushed_at', 'ttr', 'delay', 'type'], 'required', 'on' => 'create'],
+            [['job', 'data', 'queue_id'], 'string'],
             [['pushed_at', 'ttr', 'delay', 'priority', 'reserved_at', 'attempt', 'done_at', 'status', 'type'], 'integer'],
             [['channel', 'name'], 'string', 'max' => 255],
         ];
@@ -54,7 +59,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
     /**
      * @return QueueLogModelQuery|
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     public static function find()
     {
@@ -80,7 +85,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
      */
     public static function findStat($query = null)
     {
-        $query = isset($query) ? $query : new Query();
+        $query = $query ?? new Query();
 
         $query->select('[[status]], count([[status]]) as cnt ')
             ->from(self::tableName())
@@ -105,13 +110,13 @@ class QueueLogModel extends \yii\db\ActiveRecord
     /**
      * @param null|integer $statusId
      * @return string|boolean
-     * @throws \Exception
+     * @throws Exception
      */
     public function getStatusCaption($statusId = null)
     {
         $captions = self::getStatusCaptions();
 
-        $statusId = isset($statusId) ? $statusId : $this->status;
+        $statusId = $statusId ?? $this->status;
 
         return ArrayHelper::getValue($captions, $statusId, false);
     }
@@ -132,7 +137,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
         try {
             return $this->_data = Json::decode($this->data);
-        } catch (\Exception $exception) {
+        } catch (Exception $exception) {
             return [];
         }
     }
@@ -161,9 +166,9 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
 
     /**
-     * @param string|array|\closure $attribute
+     * @param string|array|closure $attribute
      * @return bool
-     * @throws \Exception
+     * @throws Exception
      */
     public function hasDataAttribute($attribute)
     {
@@ -172,7 +177,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
     /**
      * @return bool
-     * @throws \Exception
+     * @throws Exception
      */
     public function hasDataError()
     {
@@ -181,7 +186,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
     /**
      * @return bool
-     * @throws \Exception
+     * @throws Exception
      */
     public function hasDataProgress()
     {
@@ -235,7 +240,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
     /**
      * @param bool $withKeys
      * @return integer[]|integer
-     * @throws \Exception
+     * @throws Exception
      */
     public function getProgress($withKeys = false)
     {
@@ -249,7 +254,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
     /**
      * @return string
-     * @throws \Exception
+     * @throws Exception
      */
     public function getProgressText()
     {
@@ -258,7 +263,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
     /**
      * @return array
-     * @throws \Exception
+     * @throws Exception
      */
     public function getTaskErrors()
     {
@@ -267,7 +272,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
     /**
      * @return string
-     * @throws \Exception
+     * @throws Exception
      */
     public function getTaskError()
     {
@@ -282,7 +287,7 @@ class QueueLogModel extends \yii\db\ActiveRecord
 
     /**
      * @return mixed
-     * @throws \Exception
+     * @throws Exception
      */
     public function getResult()
     {

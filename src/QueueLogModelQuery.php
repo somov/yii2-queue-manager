@@ -1,7 +1,7 @@
 <?php
 /**
  * Created by PhpStorm.
- * User: web
+ * User: nsn
  * Date: 31.03.21
  * Time: 11:40
  */
@@ -93,20 +93,36 @@ class QueueLogModelQuery extends ActiveQuery
 
 
     /**
+     * @param string $column
+     * @param int|int[] $tasks
+     * @return QueueLogModelQuery
+     */
+    protected function applyById($column, &$tasks)
+    {
+        if (is_array($tasks) === false) {
+            $tasks = [$tasks];
+        }
+        $tasks = array_filter($tasks);
+
+        return $this->where(["[[$column]]" => $tasks])->indexBy($column);
+    }
+
+    /**
      * @param int|int[] $tasks
      * @return QueueLogModelQuery
      */
     public function byId(&$tasks)
     {
-        if (is_array($tasks) === false) {
-            $tasks = [$tasks];
-        }
+        return $this->applyById('id', $tasks);
+    }
 
-        $tasks = array_filter(array_map(function ($item) {
-            return (integer)$item;
-        }, $tasks));
-
-        return $this->where(['[[id]]' => $tasks])->indexBy('id');
+    /**
+     * @param int|int[] $tasks
+     * @return QueueLogModelQuery
+     */
+    public function byQueueId(&$tasks)
+    {
+        return $this->applyById('queue_id', $tasks);
     }
 
 }

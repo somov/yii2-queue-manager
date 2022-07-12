@@ -8,15 +8,22 @@
 
 namespace somov\qm;
 
+use Closure;
+use Throwable;
+use Yii;
 use yii\base\Behavior;
 use yii\base\Exception;
+use yii\base\InvalidCallException;
+use yii\base\InvalidConfigException;
+use yii\base\NotSupportedException;
 use yii\base\UserException;
-use yii\db\ActiveQuery;
 use yii\db\Query;
+use yii\db\StaleObjectException;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Inflector;
 use yii\helpers\ReplaceArrayValue;
 use yii\helpers\StringHelper;
+use yii\queue\db\Queue as DBQueue;
 use yii\queue\ExecEvent;
 use yii\queue\JobInterface;
 use yii\queue\PushEvent;
@@ -29,8 +36,15 @@ use yii\queue\Queue;
 class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 {
 
-    /** @var \yii\queue\db\Queue */
+    /**
+     * @var Queue
+     */
     public $owner;
+
+    /**
+     * @var string
+     */
+    public $defaultChannel = 'default';
 
     /**
      * @inheritdoc
@@ -51,12 +65,13 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @param array|QueueManagerJobInterface $job
      * @param QueueLogModelQuery $existQuery
      * @param array|null $config ttr, delay,priority
-     * @return int
+     * @return string
+     * @throws InvalidConfigException
      */
     public function pushJob($job, $existQuery = null, $config = null)
     {
         if (is_array($job)) {
-            $job = \Yii::createObject($job);
+            $job = Yii::createObject($job);
         }
 
         if ($existQuery instanceof QueueLogModelQuery) {
@@ -67,13 +82,13 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         if (isset($config) && is_array($config)) {
             $handler = null;
             $handler = function (PushEvent $event) use (&$handler, $config) {
-                \Yii::configure($event, $config);
+                Yii::configure($event, $config);
                 $this->owner->off(Queue::EVENT_BEFORE_PUSH, $handler);
             };
 
             $this->owner->on(Queue::EVENT_BEFORE_PUSH, $handler);
         }
-        return (int) $this->owner->push($job);
+        return $this->owner->push($job);
     }
 
     /**
@@ -98,7 +113,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         if ($total > 0 || isset($percent)) {
             $doneMax = isset($data) ? (int)ArrayHelper::getValue($data, 'max', 100) : 100;
             $raw = [
-                'percent' => isset($percent) ? $percent : (integer)round(((integer)$done * $doneMax / (integer)$total), 0),
+                'percent' => $percent ?? (integer)round(((integer)$done * $doneMax / (integer)$total), 0),
             ];
         }
 
@@ -116,6 +131,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @param array $data
      * @param string $text
      * @param integer|null $streamId
+     * @throws \Exception
      */
     public function setProgressStream($job, array $data, $text = '', $streamId = null)
     {
@@ -156,6 +172,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @param JobInterface $job
      * @param string $text
      * @param bool $save
+     * @throws InvalidConfigException
      */
     public function setProgressText($job, $text, $save = false)
     {
@@ -172,11 +189,11 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
     /**
      * @return QueueLogModelQuery
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     public function getLogListQuery()
     {
-        $query = QueueLogModel::find()->byChannel($this->owner->channel);
+        $query = QueueLogModel::find()->byChannel($this->getChannel());
         $query->behavior = $this;
         return $query;
     }
@@ -184,8 +201,9 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
     /**
      * @param int|int[]|null $status
      * @param JobInterface|string $type
-     * @param \Closure|null $queryCallback
+     * @param Closure|null $queryCallback
      * @return QueueLogModel[]|QueueLogModelQuery
+     * @throws InvalidConfigException
      */
     public function getLogsList($status = QueueDbLogInterface::LOG_STATUS_WAIT, $type = null, $queryCallback = null)
     {
@@ -206,9 +224,6 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
     }
 
 
-    /**
-     * @throws \yii\db\Exception
-     */
     public function beforePush()
     {
         $this->normalizeAutoIncrement();
@@ -217,7 +232,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
     /**
      * @param PushEvent $event
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     public function afterPush(PushEvent $event)
     {
@@ -226,6 +241,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
     /**
      * @param ExecEvent $event
+     * @throws InvalidConfigException
      */
     public function beforeExec(ExecEvent $event)
     {
@@ -241,6 +257,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
     /**
      * @param ExecEvent $event
+     * @throws InvalidConfigException
      */
     public function afterExec(ExecEvent $event)
     {
@@ -325,23 +342,20 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @param JobInterface $job
      * @param QueueLogModel $log
      */
-    protected function addLogToList($job, $log)
+    protected function addLogToList(JobInterface $job, QueueLogModel $log)
     {
-        self::$_logList[] = [
-            'log' => $log,
-            'job' => $job
-        ];
+        self::$_logList[$log->id] = compact('job', 'log');
     }
 
     /**
      * @param PushEvent $event
      * @return QueueLogModel
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     protected function createQueueLog(PushEvent $event)
     {
         $model = new QueueLogModel([
-            'id' => $event->id,
+            'queue_id' => $event->id,
             'name' => $this->getTaskName($event->job),
             'type' => $this->getTaskType($event->job),
             'ttr' => $event->ttr,
@@ -349,14 +363,18 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
             'priority' => $event->priority ?: 1024,
             'status' => QueueDbLogInterface::LOG_STATUS_WAIT,
             'job' => $event->sender->serializer->serialize($event->job),
-            'channel' => $event->sender->channel,
+            'channel' => $event->sender->channel ?? $this->getChannel(),
             'pushed_at' => time(),
         ]);
-
-        $model->save();
-
-        $this->addLogToList($event->job, $model);
-
+        try {
+            if ($model->save()) {
+                $this->addLogToList($event->job, $model);
+            } else {
+                throw new \RuntimeException('Error on save');
+            }
+        } catch (Throwable $exception) {
+            Yii::warning($exception->getMessage() . 'Cannot save queue log ' . print_r($model->toArray(), true));
+        }
         return $model;
 
     }
@@ -365,12 +383,15 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @param QueueLogModel $model
      * @return bool|false|int
      * @throws UserException
-     * @throws \Throwable
+     * @throws Throwable
      * @throws \yii\db\Exception
-     * @throws \yii\db\StaleObjectException
+     * @throws StaleObjectException
      */
     public function deleteJob(QueueLogModel $model)
     {
+        if (false === $this->owner instanceof DBQueue) {
+            throw  new InvalidCallException('Method not allowed');
+        }
 
         if ($model->status === self::LOG_STATUS_EXEC) {
             throw  new UserException('Running tasks cannot be deleted');
@@ -380,7 +401,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
             return $model->delete();
         }
 
-        if (!$message = (new Query())->from('{{%queue}}')
+        if (!$message = (new Query())->from($this->owner->tableName)
             ->select('job')->where(['[[id]]' => $model->id])->limit(1)->one()) {
             return $model->delete();
         }
@@ -393,7 +414,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
             }
         }
 
-        if (\Yii::$app->db->createCommand()->delete('{{%queue}}', ['[[id]] ' => $model->id])->execute() > 0) {
+        if (Yii::$app->db->createCommand()->delete($this->owner->tableName, ['[[id]] ' => $model->queue_id])->execute() > 0) {
             return $model->delete();
         }
 
@@ -405,12 +426,12 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * Name of job task
      * @param string|JobInterface $job
      * @return string
-     * @throws \yii\base\InvalidConfigException
+     * @throws InvalidConfigException
      */
     public function getTaskName($job)
     {
         if (is_string($job)) {
-            $job = \Yii::createObject($job);
+            $job = Yii::createObject($job);
         }
 
         if ($job instanceof QueueManagerJobInterface && method_exists($job, 'getJobName')) {
@@ -434,8 +455,9 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
     /**
      * @param JobInterface $job
-     * @param integer $id
+     * @param null $id
      * @return QueueLogModel|false
+     * @throws InvalidConfigException
      */
     private function getLog($job, $id = null)
     {
@@ -446,7 +468,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         }
 
         if (isset($id)) {
-            if ($model = QueueLogModel::findOne($id)) {
+            if ($model = QueueLogModel::find()->byQueueId($id)->one()) {
                 $this->addLogToList($job, $model);
                 return $model;
             }
@@ -455,19 +477,27 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
     }
 
     /**
-     * При перезапуске сервиса бд сбрасывается автоинкремент
-     * возвращаем значение из таблицы лога
-     * @throws \yii\db\Exception
+     * @throws InvalidConfigException
+     * @throws NotSupportedException
      */
     private function normalizeAutoIncrement()
     {
-        $db = $this->owner->db;
-
-        $raw = $db->createCommand("SHOW TABLE STATUS LIKE '" .
-            $db->getTableSchema(QueueLogModel::tableName())->fullName . "'")->queryOne(\PDO::FETCH_ASSOC);
-        $db->createCommand()->setSql("ALTER TABLE " . $this->owner->tableName .
-            "  AUTO_INCREMENT = " . $raw['Auto_increment'])->execute();
+        if ($this->owner instanceof DBQueue) {
+            $db = $this->owner->db;;
+            $db->createCommand()->executeResetSequence($this->owner->tableName, (int)$this->getLogListQuery()
+                ->select('max([[id]]) + 1')->scalar($db));
+        }
     }
 
+    /**
+     * @return string
+     */
+    protected function getChannel()
+    {
+        if ($this->owner instanceof DBQueue) {
+            return $this->owner->channel;
+        }
+        return  $this->defaultChannel;
+    }
 
 }
