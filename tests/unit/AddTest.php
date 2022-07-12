@@ -6,7 +6,7 @@ use somov\qm\QueueDbLogInterface;
 use somov\qm\QueueLogModel;
 use yii\queue\sqs\Queue;
 
-class InitTest extends \Codeception\TestCase\Test
+class AddTest extends \Codeception\TestCase\Test
 {
 
 

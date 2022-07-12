@@ -25,6 +25,7 @@ use yii\helpers\ReplaceArrayValue;
 use yii\helpers\StringHelper;
 use yii\queue\db\Queue as DBQueue;
 use yii\queue\ExecEvent;
+use yii\queue\JobEvent;
 use yii\queue\JobInterface;
 use yii\queue\PushEvent;
 use yii\queue\Queue;
@@ -45,6 +46,11 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @var string
      */
     public $defaultChannel = 'default';
+
+    /**
+     * @var int
+     */
+    public $defaultPriority = 1024;
 
     /**
      * @inheritdoc
@@ -246,13 +252,14 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
     public function beforeExec(ExecEvent $event)
     {
         if (!$log = $this->getLog($event->job, $event->id)) {
-            return;
+             $log = $this->createQueueLog($event);
         }
         $log->reserved_at = time();
         $log->attempt = $event->attempt;
         $log->status = QueueDbLogInterface::LOG_STATUS_EXEC;
         $log->pid = $event->sender->getWorkerPid();
         $log->save();
+
     }
 
     /**
@@ -303,6 +310,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
 
     /**
      * @param ExecEvent $event
+     * @throws InvalidConfigException
      */
     public function afterError(ExecEvent $event)
     {
@@ -352,16 +360,16 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
      * @return QueueLogModel
      * @throws InvalidConfigException
      */
-    protected function createQueueLog(PushEvent $event)
+    protected function createQueueLog(JobEvent $event)
     {
         $model = new QueueLogModel([
             'queue_id' => $event->id,
             'name' => $this->getTaskName($event->job),
             'type' => $this->getTaskType($event->job),
-            'ttr' => $event->ttr,
-            'delay' => $event->delay,
-            'priority' => $event->priority ?: 1024,
-            'status' => QueueDbLogInterface::LOG_STATUS_WAIT,
+            'ttr' => $event->ttr ?? 0,
+            'delay' => $event->delay ?? 0,
+            'priority' => $event->priority ?? $this->defaultPriority,
+            'status' => ($event instanceof ExecEvent) ? QueueDbLogInterface::LOG_STATUS_EXEC : QueueDbLogInterface::LOG_STATUS_WAIT ,
             'job' => $event->sender->serializer->serialize($event->job),
             'channel' => $event->sender->channel ?? $this->getChannel(),
             'pushed_at' => time(),
@@ -373,7 +381,10 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
                 throw new \RuntimeException('Error on save');
             }
         } catch (Throwable $exception) {
-            Yii::warning($exception->getMessage() . 'Cannot save queue log ' . print_r($model->toArray(), true));
+            Yii::warning(
+                $exception->getMessage() . 'Cannot save queue log ' . print_r($model->toArray(), true
+                ),
+                __METHOD__);
         }
         return $model;
 
@@ -497,7 +508,7 @@ class QueueDbLogBehavior extends Behavior implements QueueDbLogInterface
         if ($this->owner instanceof DBQueue) {
             return $this->owner->channel;
         }
-        return  $this->defaultChannel;
+        return $this->defaultChannel;
     }
 
 }
