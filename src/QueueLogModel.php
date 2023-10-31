@@ -158,7 +158,9 @@ class QueueLogModel extends ActiveRecord
     public function beforeSave($insert)
     {
         if (parent::beforeSave($insert)) {
-            $this->data = Json::encode($this->_data);
+            if (isset($this->_data) && is_array($this->_data)) {
+                $this->data = Json::encode($this->_data);
+            }
             return true;
         }
         return false;
